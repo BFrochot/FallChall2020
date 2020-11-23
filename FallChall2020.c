@@ -490,7 +490,7 @@ void set_learnable_spells(learnable_t *ls, spell_t *spells, pot_t *pots, char *m
     }
 }
 
-//
+// returns the id of the learnbale spell I want to buy
 int buy_spell(learnable_t *ls, int spells_learned, char inv[4], int actual_sum) {
     learnable_t *save;
     float worst_sum_value = -1;
