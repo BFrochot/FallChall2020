@@ -27,6 +27,7 @@ typedef struct pot_t {
     int cost[4];
     int id;
     int price;
+    // lower number of moves to get / price
     float value;
     int path[30];
     bool got_path;
@@ -50,7 +51,9 @@ typedef struct learnable_t {
     int cost[4];
     int id;
     int taxe;
+    // sum of potions lower number of moves to get
     int sum;
+    // sum of potions lower values to get
     float sum_value;
     bool repeatable;
     int index;
@@ -58,7 +61,7 @@ typedef struct learnable_t {
     struct learnable_t *prev;
 } learnable_t;
 
-// Bfs queue
+// BFS queue
 typedef struct queue {
     char inv[4];
     char path[30];
@@ -67,7 +70,7 @@ typedef struct queue {
     struct queue *next;
 } queue;
 
-// set done pot
+// set potion at finished (got_path, path, value)
 void pot_done(queue *q, pot_t *pot) {
     char i = 0;
 
@@ -82,8 +85,8 @@ void pot_done(queue *q, pot_t *pot) {
     fprintf(stderr,"  Val %.4f Price %d Id %d Op %.0f\n", pot->value, pot->price, pot->id, (float)q->sum);
 }
 
-// take a queue element and list of pots
-// returns the numbers of unbrewed pots that can be brewed
+// input : current queue element, list of potions
+// returns the number of unbrewed pots that can be brewed
 char can_do_pot(queue *q, pot_t *pot) {
     bool can_do_pot;
     char a = 0;
@@ -121,7 +124,7 @@ bool launchable(spell_t *sp, queue *q, char multiple) {
     return sum < 11;
 }
 
-// true if the _state of spells is new
+// true if the _state of spells has never been seen
 bool diff_state(queue *q, int sum, int states[40], char multiple, spell_t *spells) {
     bool b;
     int i;
@@ -175,7 +178,7 @@ queue *graveyard(queue *q) {
     return NULL;
 }
 
-void set_visited(char *inv) {
+void clear_visited(char *inv) {
     for (int i = 0; i < 10; i++) {
         for (int j = 0; j < 10; j++) {
             for (int k = 0; k < 10; k++) {
@@ -189,10 +192,9 @@ void set_visited(char *inv) {
         }
     }
     visited[inv[0]][inv[1]][inv[2]][inv[3]][0] = 1;
-
 }
 
-// algorythm setting pots best paths
+// algorithm sets best path for each potion
 void bfs(char *inv, spell_t *first_spell, char nb_pots, pot_t *first_pot) {
     int cmp_pots = 0;
     char multiple;
@@ -203,7 +205,7 @@ void bfs(char *inv, spell_t *first_spell, char nb_pots, pot_t *first_pot) {
     spell_t *sp;
 
     clock_t timer = clock(); 
-    set_visited(inv);
+    clear_visited(inv);
 
     queue *last_q;
     queue *first_q;
@@ -334,16 +336,7 @@ void put_nbr(int n)
     putchar(-(n % 10) + '0');
 }
 
-// returns true if _inv >= _cost
-bool got_cost(int cost[4], char inv[4]) {
-    for (int i = 0; i < 4; i++) {
-        if (cost[i] + inv[i] < 0)
-            return false;
-    }
-    return true;
-}
-
-// Add new spell to spell list
+// add new spell to spell list
 spell_t *add_spell(spell_t *sp, int cost[4], int id, bool _repeatable, bool _usable) {
     if (sp == NULL) {
         sp = malloc(sizeof(spell_t));
@@ -368,7 +361,7 @@ spell_t *add_spell(spell_t *sp, int cost[4], int id, bool _repeatable, bool _usa
     return sp;
 }
 
-// Add new learnable spell to learnable list
+// add new learnable spell to learnable list
 learnable_t *add_learnable(int cost[4], int id, learnable_t *ls, int taxe, bool _repeatable, int index) {
     if (ls == NULL) {
         ls = malloc(sizeof(learnable_t));
@@ -410,18 +403,24 @@ void rest(spell_t *first_sp) {
     write(1, "REST \n", 6);
 }
 
-void spelling(pot_t *potion, spell_t *first_sp, char inv[4]) {
+// sends move
+void send_move(pot_t *potion, spell_t *first_sp, char inv[4]) {
     int i = 0;
     while (potion->path[++i] == potion->path[0])
         ;
+    // move is a spell
     if (potion->path[0] > 0) {
         while (first_sp->id != potion->path[0])
             first_sp = first_sp->next;
         cast(potion->path[0], first_sp, i);
-        return;  
-    } else if (potion->path[0] == -1) {
+        return;
+    }
+    // move is a spell
+    else if (potion->path[0] == -1) {
         rest(first_sp);
-    } else {
+    }
+    // move is brew
+    else {
         write(1, "BREW ", 5);
         put_nbr(potion->id);
         write(1, "\n", 1);
@@ -430,6 +429,7 @@ void spelling(pot_t *potion, spell_t *first_sp, char inv[4]) {
     }
 }
 
+// reset potions and remove last spell
 void reset(pot_t *pots, spell_t *spells, int id) {
     while (pots != NULL) {
         pots->path[0] = 0;
@@ -451,7 +451,8 @@ void add_spell_end(learnable_t *ls, spell_t *spells) {
     add_spell(spells, ls->cost, ls->id, ls->repeatable, 1);
 }
 
-void set_new_spells(learnable_t *ls, spell_t *spells, pot_t *pots, char *my_inv) {
+// sets learnable spells sum and sum_value
+void set_learnable_spells(learnable_t *ls, spell_t *spells, pot_t *pots, char *my_inv) {
     int sum;
     float sum_value;
     pot_t *save_pots;
@@ -481,7 +482,7 @@ void set_new_spells(learnable_t *ls, spell_t *spells, pot_t *pots, char *my_inv)
             }
             ls->sum = sum;
             ls->sum_value = sum_value;
-            fprintf(stderr, "sum value = %d %f\n", sum, sum_value);
+            fprintf(stderr, "sum value : %d %f\n", sum, sum_value);
             inv[0] += ls->index - ls->taxe;
             reset(pots, spells, ls->id);
         }
@@ -489,6 +490,7 @@ void set_new_spells(learnable_t *ls, spell_t *spells, pot_t *pots, char *my_inv)
     }
 }
 
+//
 int buy_spell(learnable_t *ls, int spells_learned, char inv[4], int actual_sum) {
     learnable_t *save;
     float worst_sum_value = -1;
@@ -688,7 +690,7 @@ int main()
 
         //set spells
         fprintf(stderr, "---Set spells---\n");
-        set_new_spells(ls, sp, it, inv);
+        set_learnable_spells(ls, sp, it, inv);
         /*fprintf(stderr, "Spell %i is %i and %f\n", ls->id, ls->sum, ls->sum_value); 
         while (ls->next) {
             ls = ls->next;
@@ -829,7 +831,7 @@ int main()
             objective = -1;
         }
         else
-            spelling(it, sp, inv);
+            send_move(it, sp, inv);
 
         //free memory for potions
         while (it->next != NULL)
